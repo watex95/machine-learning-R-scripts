@@ -1,0 +1,156 @@
+---
+title: "Naive Bayes markdown"
+author: "hillary"
+date: "28 January 2019"
+output: html_document
+---
+---
+Classification method that uses probability to estimate the likelihood that an observation falls into certain categories
+Classifiers based on Bayesian methods utilize training data to calculate an observed probability of each outcome based on the evidence provided by feature values. When
+the classifier is later applied to unlabeled data, it uses the observed probabilities to predict the most likely class for the new features.
+It's a simple idea, but it results in a method that often has results on par with more sophisticated algorithms
+
+DATA LOADING, INSTALL PACKAGES & DESCREPTIVE STATS
+---
+
+```{r}
+sms_raw=read.csv('sms_raw.csv',stringsAsFactors = FALSE)
+head(sms_raw)
+#install.packages("tm")#text mining packages 
+#install.packages("SnowballC")
+#install.packages("gmodels")
+```
+
+```{r}
+as.character(sms_raw$text[1])
+str(sms_raw$text)
+table(sms_raw$type)
+```
+
+
+CLEANING AND STANDARDIZING THE DATA
+```{r}
+library(tm)
+sms_corpus <- VCorpus(VectorSource(sms_raw$text))
+sms_corpus
+print(sms_corpus)
+inspect(sms_corpus[1:2])
+as.character(sms_corpus[[1]])
+lapply(sms_corpus[1:2], as.character)
+
+```
+
+Convert to lower case
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus,content_transformer(tolower))
+as.character(sms_corpus_clean[[1]])
+```
+Remove numbers
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, removeNumbers)
+as.character(sms_corpus_clean[[1]])
+```
+Remove stopwords
+```{r}
+sms_corpus_clean<-tm_map(sms_corpus_clean,removeWords,stopwords())
+as.character(sms_corpus_clean[[1]])
+```
+Remove punctuation
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, removePunctuation)
+as.character(sms_corpus_clean[[1]])
+```
+Stem the document; returns the same vector of terms in its root form
+```{r}
+library(SnowballC)
+sms_corpus_clean <- tm_map(sms_corpus_clean, stemDocument)
+as.character(sms_corpus_clean[[1]])
+```
+Strip whitespace
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, stripWhitespace)
+as.character(sms_corpus_clean[[1]])
+```
+DATA PREPARATION  splitting text documents into words
+1. Creating a DTM sparse matrix, given a tm corpus, involves a single command:
+```{r}
+sms_dtm <- DocumentTermMatrix(sms_corpus_clean)
+str(sms_dtm)
+rowTotals<-apply(sms_dtm,1,sum)#Find the sum of words in each Document
+sms_dtm.new   <- sms_dtm[rowTotals> 0, ] #remove all docs without words
+```
+if the two sms_dtm are not similar then stopwords must be the problem thus replace it with the following function to correct it.
+```{r}
+stopwords = function(x) { removeWords(x, stopwords()) }
+```
+2. Creating training and test datasets
+```{r}
+sms_dtm_train <- sms_dtm.new[1:4169, ]
+sms_dtm_test <- sms_dtm.new[4170:7028, ]
+sms_train_labels <- sms_raw[1:4169, ]$type
+sms_test_labels <- sms_raw[4170:7028, ]$type
+#To confirm that the subsets are representative of the complete set of SMS data, let's compare the proportion of spam in the training and test data frames:
+prop.table(table(sms_train_labels))
+prop.table(table(sms_test_labels))
+```
+3. Visualizing text data  word clouds
+```{r}
+library("RColorBrewer")
+library("wordcloud")
+wordcloud(sms_corpus_clean, min.freq = 50, random.order = FALSE)
+```
+split for separate visualisations
+```{r}
+spam <- subset(sms_raw, type == "spam")
+ham <- subset(sms_raw, type == "ham")
+wordcloud(spam$text, max.words = 40, scale = c(3, 0.5))
+wordcloud(ham$text, max.words = 40, scale = c(3, 0.5))
+```
+4. Creating indicator features for frequent words
+```{r}
+findFreqTerms(sms_dtm_train, 5)
+sms_freq_words <- findFreqTerms(sms_dtm_train, 5)
+str(sms_freq_words)
+```
+4. Creating indicator features for frequent words
+```{r}
+findFreqTerms(sms_dtm_train, 5)
+sms_freq_words <- findFreqTerms(sms_dtm_train, 5)
+str(sms_freq_words)
+```
+Create train and test for freq words
+```{r}
+sms_dtm_freq_train<- sms_dtm_train[ , sms_freq_words]
+sms_dtm_freq_test <- sms_dtm_test[ , sms_freq_words]
+convert_counts <- function(x) {
+x <- ifelse(x > 0, "Yes", "No")
+}
+```
+Apply the convert function to create the train and test 
+```{r}
+sms_train <- apply(sms_dtm_freq_train, MARGIN = 2,convert_counts)
+sms_test <- apply(sms_dtm_freq_test, MARGIN = 2,convert_counts)
+```
+TRAINING A MODEL ON THE DATA
+```{r}
+str(sms_train_labels)
+head(sms_train_labels)
+library("naivebayes")
+sms_classifier <- naive_bayes(sms_train, sms_train_labels)
+```
+EVALUATING MODEL PERFORMANCE
+Prediction
+```{r}
+sms_test_pred <- predict(sms_classifier,sms_test)
+#Check the false posiutives and negatives
+library(gmodels)
+CrossTable(sms_test_pred, sms_test_labels,prop.chisq = FALSE, prop.t = FALSE,dnn = c('predicted', 'actual'))
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,74 @@
+---
+title: "FInancial time series model: Returns from Beef"
+author: "hillary"
+date: "29 January 2019"
+output: html_document
+---
+Load data
+```{r}
+beef_price=read.csv("beef_price.csv",header=T)
+head(beef_price)
+```
+convert to time series
+
+```{r}
+Beefprice=ts(beef_price,frequency = 12,start = 2010,end=2018)
+
+```
+just check to confirm its a time series
+
+```{r}
+str(Beefprice)
+```
+
+Package installation
+install the tseries package to perform stationarity test
+```{r}
+library(tseries)
+```
+FINANCIAL TIME SERIES ANALYSIS TO ANALYSE THE TREND OF RETURNS 
+RETURNS(Rt)=P(t)/P(t-1)
+log(Rt)=log(Pt)-log(Pt-1)
+
+DECOMPOSING THE SERIES TO GET RID OF SEASONALITY
+Get the log returns with lag=16 years back to remove the multiplicative seasonality
+```{r}
+log_returns <- diff(log(Beefprice), lag=10)
+head(log_returns)
+```
+
+
+Test for stationarity  if alpha<0.05 reject null hypothesis
+```{r}
+adf.test(log_returns)
+```
+
+```{r}
+plot(log_returns)
+```
+
+Plot the ACF and PACF to determine the order of the ARIMA model
+```{r}
+acf(log_returns)
+```
+```{r}
+pacf(log_returns)
+```
+From the ACF 2 lags cut off the dotted line hence q=2 as for p=3 coz 3 lags cut off the dotted line in the PACF order=(3,1,3)=(p,d,q), d=2 coz difference was done twice.
+
+ARIMA ON THE LOG RETURNS
+
+```{r}
+mymodel=arima(log_returns,order = c(2,2,5))
+mymodel
+
+```
+
+FORECASTING FOR THE YEAR 2020
+```{r}
+log_returns_2019<-predict(mymodel,n.ahead=12)
+log_returns_2019
+
+
+
+
