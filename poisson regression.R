@@ -1,36 +1,63 @@
+
+
+#The number of awards earned by students at one high school. Predictors 
+#of the number of awards earned include the type of program in which the 
+#student was enrolled (e.g., vocational, general or academic) and the
+#score on their final exam in math.
+
+#--------------------------------------------------------------------------------
+#You need to make sure you update to the latest R version
 # installing/loading the latest installr package:
 install.packages("installr"); library(installr) # install+load installr
-
 updateR() # updating R.
-
-
 #-----------------------------------------------------------------------------
 
-getwd()
-install.packages("ggplot2")
-install.packages("msm")
+#TROUBLESHOOTING
+#remove.packages(c("ggplot2", "data.table"))
+#install.packages('Rcpp', dependencies = TRUE)
+#install.packages('colorspace', dependencies = TRUE)
+#install.packages('data.table', dependencies = TRUE)
+
+#LOAD THE DATA
 p<-read.csv("https://stats.idre.ucla.edu/stat/data/poisson_sim.csv")
 
-attach(p)
-prog<-factor(p$prog,levels=1:3,labels=c("General","Academic","Vocational"))
-table(prog)
+#check the data format
+str(p)
 
+#convert program & id variables into a factor
+p$prog<-factor(p$prog,levels=1:3,labels=c("General","Academic","Vocational"))
 id <- factor(id)
+
+#Descriptive statistics
+#check how many students in each progrm
+table(prog)
 summary(p)
 
+#mean and sd of score in each category
 with(p, tapply(num_awards, prog, function(x) {
   sprintf("M (SD) = %1.2f (%1.2f)", mean(x), sd(x))
 }))
 
-
+#plot count of students in each program by the number of awrds earned
 ggplot(p, aes(num_awards, fill = prog)) +
   geom_histogram(binwidth=.5, position="dodge")
 
+#POISSON REGRESSION MODEL
+summary(m1<-glm(num_awards ~ prog + math, family="poisson",data=p))
 
-summary(m1<-glm(num_awards ~ prog + math, family="pisson",data=p))
-
+#variance co-variance matrix of the predictors/features
 cov.m1 <- vcovHC(m1, type="HC0")
+
+#std error of each predictor/estimator
 std.err <- sqrt(diag(cov.m1))
+
+
+#Using robust standard errors for the parameter estimates to control for 
+#mild violation of the distribution assumption that the variance equals 
+#the mean. We use R package sandwich below to obtain the robust standard 
+#errors and calculated the p-values accordingly. Together with the p-values,
+#we have also calculated the 95% confidence interval using the parameter 
+#estimates and their robust standard errors.
 r.est <- cbind(Estimate= coef(m1), "Robust SE" = std.err,
                "Pr(>|z|)" = 2 * pnorm(abs(coef(m1)/std.err), lower.tail=FALSE),
                LL = coef(m1) - 1.96 * std.err,
@@ -74,6 +101,7 @@ with(m1, cbind(res.deviance = deviance, df = df.residual,
 
 ## update m1 model dropping prog
 m2 <- update(m1, . ~ . - prog)
+m2
 ## test model differences with chi square test
 anova(m2, m1, test="Chisq")
 
@@ -83,6 +111,7 @@ anova(m2, m1, test="Chisq")
 #interval. To compute the standard error for the incident rate ratios,
 #we will use the Delta method. To this end, we make use the function 
 #deltamethod implemented in R package msm.
+
 s <- deltamethod(list(~ exp(x1), ~ exp(x2), ~ exp(x3), ~ exp(x4)), 
                  coef(m1), cov.m1)
 
@@ -97,7 +126,7 @@ rexp.est
 #Likewise, the incident rate for prog = "Vocational" is 1.45 times the
 #incident rate for the reference group holding the other variables at 
 #constant. The percent change in the incident rate of num_awards is by 7% 
-#for every unit increase in math
+#for every unit increase in math score
 (s1 <- data.frame(math = mean(p$math),
 prog = factor(1:3, levels = 1:3, labels = levels(p$prog))))
 
@@ -109,11 +138,14 @@ predict(m1, s1, type="response", se.fit=TRUE)
 #predicted counts ((frac{.625}{.211} = 2.96), (frac{.306}{.211} = 1.45)) 
 
 
+
 # calculate and store predicted values
 p$phat <- predict(m1, type="response")
+head(p$phat)
 
 ## order by program and then by math
 p <- p[with(p, order(prog, math)), ]
+head(p)
 
 ## create the plot
 ggplot(p, aes(x = math, y = phat, colour = prog)) +
